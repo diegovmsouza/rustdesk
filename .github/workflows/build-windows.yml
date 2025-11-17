@@ -47,9 +47,8 @@ jobs:
 
       - name: Install Windows deps (Sciter, etc)
         run: |
-          C:\vcpkg\vcpkg install libuv:x64-windows
-          C:\vcpkg\vcpkg install openssl:x64-windows
-          C:\vcpkg\vcpkg install curl:x64-windows
+         cd C:\vcpkg
+         vcpkg install --triplet x64-windows
 
       - name: Set VCPKG_ROOT
         run: echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
