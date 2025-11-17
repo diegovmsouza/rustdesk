@@ -60,11 +60,6 @@ jobs:
           C:\vcpkg\vcpkg.exe install "libvpx:x64-windows-static"
           C:\vcpkg\vcpkg.exe install "libsodium:x64-windows-static"
 
-      - name: Install Windows deps (Sciter, etc)
-        run: |
-          cd C:\vcpkg
-          .\bootstrap-vcpkg.bat
-
       - name: Set VCPKG_ROOT
         run: echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
         
