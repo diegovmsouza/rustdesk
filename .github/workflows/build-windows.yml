@@ -33,9 +33,14 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      # LLVM já existe no runner — só apontamos o caminho
       - name: Set LIBCLANG_PATH
         run: echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Set ENV from secrets
+        run: |
+          echo "RENDEZVOUS_SERVER=${{ secrets.RENDEZVOUS_SERVER }}" >> $GITHUB_ENV
+          echo "RELAY_SERVER=${{ secrets.RELAY_SERVER }}" >> $GITHUB_ENV
+          echo "RS_PUB_KEY=${{ secrets.RS_PUB_KEY }}" >> $GITHUB_ENV
 
       - name: Show LLVM version
         run: clang --version
@@ -53,15 +58,7 @@ jobs:
 
       - name: Set VCPKG_ROOT
         run: echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Inject custom server & key (RustDesk)
-        shell: pwsh
-        run: |
-          (Get-Content .\src\common\config.rs) `
-            -replace 'DEFAULT_RENDEZVOUS_SERVER', "$env:RENDEZVOUS_SERVER" `
-            -replace 'DEFAULT_RS_PUB_KEY', "$env:RS_PUB_KEY" `
-            -replace 'DEFAULT_RELAY_SERVER', "$env:RELAY_SERVER" `
-            | Set-Content .\src\common\config.rs
+        
 
       - name: Build (Windows x64, Release)
         run: cargo build --release
