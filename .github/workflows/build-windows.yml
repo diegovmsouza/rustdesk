@@ -48,7 +48,7 @@ jobs:
       - name: Install Windows deps (Sciter, etc)
         run: |
           cd C:\vcpkg
-         .\bootstrap-vcpkg.bat
+          .\bootstrap-vcpkg.bat
 
 
       - name: Set VCPKG_ROOT
