@@ -13,7 +13,8 @@ on:
 pull_request: 
   branches: [ main, master ]
 
-permissions: contents: read
+permissions: 
+  contents: read
 
 jobs: 
   build-windows-x64: 
