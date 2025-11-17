@@ -1,4 +1,4 @@
-name: Build RustDesk Windows x64 (Sciter) with custom server ID & key
+name: Build RustDesk Windows x64 (Custom Server)
 
 on:
   push:
@@ -6,7 +6,8 @@ on:
     paths:
       - ".github/workflows/**"
       - "**/*.rs"
-      - "Cargo.*"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - "libs/**"
       - "src/**"
   pull_request:
@@ -18,123 +19,55 @@ permissions:
 jobs:
   build-windows-x64:
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: pwsh
+
+    env:
+      # Pegando tudo dos Secrets
+      RENDEZVOUS_SERVER: ${{ secrets.RENDEZVOUS_SERVER }}
+      RS_PUB_KEY: ${{ secrets.RS_PUB_KEY }}
+      RELAY_SERVER: ${{ secrets.RELAY_SERVER }}
 
     steps:
-      - name: Checkout (submodules)
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Setup Rust (stable)
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
 
-      - name: Setup Flutter (stable)
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
+      # LLVM já existe no runner — só apontamos o caminho
+      - name: Set LIBCLANG_PATH
+        run: echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Enable Flutter Windows desktop
+      - name: Show LLVM version
+        run: clang --version
+
+      - name: Install vcpkg
         run: |
-          flutter config --enable-windows-desktop
-          flutter --version
-          flutter doctor -v
+          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat
 
-      - name: Install Git & vcpkg dependencies
+      - name: Install Windows deps (Sciter, etc)
         run: |
-          git --version
-          git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
-          & $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
-          echo "VCPKG_ROOT=$env:USERPROFILE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
-          $pkgs = @(
-            'libvpx:x64-windows-static',
-            'libyuv:x64-windows-static',
-            'opus:x64-windows-static',
-            'aom:x64-windows-static'
-          )
-          & $env:USERPROFILE\vcpkg\vcpkg.exe install $pkgs
+          C:\vcpkg\vcpkg install libuv:x64-windows
+          C:\vcpkg\vcpkg install openssl:x64-windows
+          C:\vcpkg\vcpkg install curl:x64-windows
 
-      - name: Cache cargo registry + git
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Set VCPKG_ROOT
+        run: echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Cache vcpkg installed
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.USERPROFILE }}\vcpkg\installed
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('.github/workflows/**','vcpkg.json') }}
-
-      - name: Download Sciter DLL (RustDesk Windows desktop)
+      - name: Inject custom server & key (RustDesk)
+        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path target\release | Out-Null
-          Invoke-WebRequest -UseBasicParsing `
-            -Uri https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.win/x64/sciter.dll `
-            -OutFile target\release\sciter.dll
+          (Get-Content .\src\common\config.rs) `
+            -replace 'DEFAULT_RENDEZVOUS_SERVER', "$env:RENDEZVOUS_SERVER" `
+            -replace 'DEFAULT_RS_PUB_KEY', "$env:RS_PUB_KEY" `
+            -replace 'DEFAULT_RELAY_SERVER', "$env:RELAY_SERVER" `
+            | Set-Content .\src\common\config.rs
 
-      - name: Apply custom rendezvous/key/relay from Secrets
-        env:
-          RENDEZVOUS_SERVER: ${{ secrets.RENDEZVOUS_SERVER }}
-          RS_PUB_KEY: ${{ secrets.RS_PUB_KEY }}
-          RELAY_SERVER: ${{ secrets.RELAY_SERVER }}
-        run: |
-          if (-not $env:RENDEZVOUS_SERVER) { Write-Error "RENDEZVOUS_SERVER not set"; exit 1 }
-          if (-not $env:RS_PUB_KEY) { Write-Error "RS_PUB_KEY not set"; exit 1 }
-          if (-not $env:RELAY_SERVER) { $env:RELAY_SERVER = "" }
-
-          echo "Using RENDEZVOUS_SERVER=$env:RENDEZVOUS_SERVER"
-          echo "Using RS_PUB_KEY=(hidden)"
-          echo "Using RELAY_SERVER=$env:RELAY_SERVER"
-
-          $files = Get-ChildItem -Recurse -File -Path libs -Filter config.rs
-          if ($files.Count -eq 0) {
-            Write-Error "config.rs not found"; exit 1
-          }
-
-          foreach ($f in $files) {
-            (Get-Content $f.FullName) |
-              ForEach-Object {
-                $_ -replace 'DEFAULT_RENDEZVOUS_SERVER\s*:\s*&str\s*=\s*".*?"', "DEFAULT_RENDEZVOUS_SERVER: &str = `"$env:RENDEZVOUS_SERVER`"" |
-                ForEach-Object {
-                  $_ -replace 'DEFAULT_RS_PUB_KEY\s*:\s*&str\s*=\s*".*?"', "DEFAULT_RS_PUB_KEY: &str = `"$env:RS_PUB_KEY`""
-                } |
-                ForEach-Object {
-                  $_ -replace 'DEFAULT_RELAY_SERVER\s*:\s*&str\s*=\s*".*?"', "DEFAULT_RELAY_SERVER: &str = `"$env:RELAY_SERVER`""
-                }
-              } | Set-Content $f.FullName -Encoding UTF8
-          }
-
-      - name: Build (release, x64)
-        run: |
-          cargo build --release --target x86_64-pc-windows-msvc
-
-      - name: Rename binary with host/key (optional)
-        env:
-          RENDEZVOUS_SERVER: ${{ secrets.RENDEZVOUS_SERVER }}
-        run: |
-          $exe = "target\x86_64-pc-windows-msvc\release\rustdesk.exe"
-          if (Test-Path $exe) {
-            $safeHost = ($env:RENDEZVOUS_SERVER -replace '[^a-zA-Z0-9.-]', '-')
-            Copy-Item $exe "rustdesk-$safeHost.exe"
-          }
+      - name: Build (Windows x64, Release)
+        run: cargo build --release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-x64
-          path: |
-            target/x86_64-pc-windows-msvc/release/rustdesk.exe
-            rustdesk-*.exe
-            target/release/sciter.dll
-
-      - name: Show binary size
-        run: |
-          Get-ChildItem target\x86_64-pc-windows-msvc\release\rustdesk.exe |
-            Select-Object Name,Length
+          name: RustDesk-Windows-x64-Custom
+          path: target/release/rustdesk.exe
