@@ -53,15 +53,13 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
 
-      - name: Install required RustDesk dependencies via vcpkg
-        run: |
-          C:\vcpkg\vcpkg.exe install "libyuv:x64-windows-static"
-          C:\vcpkg\vcpkg.exe install "openssl:x64-windows-static"
-          C:\vcpkg\vcpkg.exe install "libvpx:x64-windows-static"
-          C:\vcpkg\vcpkg.exe install "libsodium:x64-windows-static"
-
       - name: Set VCPKG_ROOT
         run: echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install required deps using manifest
+        run: |
+          cd C:\vcpkg
+          .\vcpkg.exe install --triplet x64-windows-static
         
       - name: Build (Windows x64, Release)
         run: cargo build --release
