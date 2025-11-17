@@ -21,7 +21,6 @@ jobs:
     runs-on: windows-latest
 
     env:
-      # Pegando tudo dos Secrets
       RENDEZVOUS_SERVER: ${{ secrets.RENDEZVOUS_SERVER }}
       RS_PUB_KEY: ${{ secrets.RS_PUB_KEY }}
       RELAY_SERVER: ${{ secrets.RELAY_SERVER }}
@@ -36,17 +35,14 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Set LIBCLANG_PATH
+      - name: Set LLVM PATH
         run: echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Set ENV from secrets
-        run: |
-          echo "RENDEZVOUS_SERVER=${{ secrets.RENDEZVOUS_SERVER }}" >> $GITHUB_ENV
-          echo "RELAY_SERVER=${{ secrets.RELAY_SERVER }}" >> $GITHUB_ENV
-          echo "RS_PUB_KEY=${{ secrets.RS_PUB_KEY }}" >> $GITHUB_ENV
 
       - name: Show LLVM version
         run: clang --version
+
+      - name: Disable metrics
+        run: echo "VCPKG_DISABLE_METRICS=1" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Install vcpkg
         run: |
@@ -56,11 +52,11 @@ jobs:
       - name: Set VCPKG_ROOT
         run: echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Install required deps using manifest
+      - name: Install required deps (manifest mode)
         run: |
-          cd D:\a\rustdesk\rustdesk\
-          C:\vcpkg\vcpkg.exe install --triplet x64-windows
-        
+          cd $env:GITHUB_WORKSPACE
+          C:\vcpkg\vcpkg.exe install --triplet x64-windows --clean-after-build
+
       - name: Build (Windows x64, Release)
         run: cargo build --release
 
