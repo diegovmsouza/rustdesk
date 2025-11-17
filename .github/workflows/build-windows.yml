@@ -58,8 +58,8 @@ jobs:
 
       - name: Install required deps using manifest
         run: |
-          cd C:\vcpkg
-          .\vcpkg.exe install --triplet x64-windows-static
+          cd D:\a\rustdesk\rustdesk\
+          C:\vcpkg\vcpkg.exe install --triplet x64-windows
         
       - name: Build (Windows x64, Release)
         run: cargo build --release
