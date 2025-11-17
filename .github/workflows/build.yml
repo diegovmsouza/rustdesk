@@ -1,0 +1,103 @@
+name: Build RustDesk Windows x64 (Sciter) with custom server ID & key
+
+on: 
+ push: 
+  branches: [ main, master ] 
+  paths: 
+     - '.github/workflows/' 
+     - '/.rs' 
+     - 'Cargo.' 
+     - 'libs/' 
+     - 'src/' 
+     
+pull_request: 
+  branches: [ main, master ]
+
+permissions: contents: read
+
+jobs: 
+  build-windows-x64: 
+    runs-on: windows-latest 
+defaults: 
+  run: 
+    shell: pwsh
+
+steps:
+  - name: Checkout (submodules)
+    uses: actions/checkout@v4
+    with:
+      submodules: recursive
+
+  - name: Setup Rust (stable)
+    uses: dtolnay/rust-toolchain@stable
+    with:
+      targets: x86_64-pc-windows-msvc
+
+  - name: Setup Flutter (stable)
+    uses: subosito/flutter-action@v2
+    with:
+      channel: stable
+  - name: Enable Flutter Windows desktop
+    run: |
+      flutter config --enable-windows-desktop
+      flutter --version
+      flutter doctor -v
+
+  - name: Install LLVM/Clang (for bindgen)
+    run: |
+      choco install -y llvm --version=18.1.6
+      echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+  - name: Install Git & vcpkg dependencies
+    run: |
+      git --version
+      git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
+      & $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
+      echo "VCPKG_ROOT=$env:USERPROFILE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+      $pkgs = @('libvpx:x64-windows-static','libyuv:x64-windows-static','opus:x64-windows-static','aom:x64-windows-static')
+      & $env:USERPROFILE\vcpkg\vcpkg.exe install $pkgs
+
+  - name: Cache cargo registry + git
+    uses: actions/cache@v4
+    with:
+      path: |
+        ~/.cargo/registry
+        ~/.cargo/git
+      key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+  - name: Cache vcpkg installed
+    uses: actions/cache@v4
+    with:
+      path: ${{ env.USERPROFILE }}\vcpkg\installed
+      key: vcpkg-${{ runner.os }}-${{ hashFiles('.github/workflows/**','vcpkg.json') }}
+
+  - name: Download Sciter DLL (RustDesk Windows desktop)
+    run: |
+      New-Item -ItemType Directory -Force -Path target\release | Out-Null
+      Invoke-WebRequest -UseBasicParsing -Uri https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.win/x64/sciter.dll -OutFile target\release\sciter.dll
+
+  - name: (Optional) Set ID/Key/Relay from Secrets
+    env:
+      RENDEZVOUS_SERVER: ${{ secrets.RENDEZVOUS_SERVER }}
+      RS_PUB_KEY: ${{ secrets.RS_PUB_KEY }}
+      RELAY_SERVER: ${{ secrets.RELAY_SERVER }}
+
+  - name: Build (release, x64)
+    env:
+      VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
+    run: |
+      $env:VCPKG_ROOT = "$env:VCPKG_ROOT"
+      cargo build --release --target x86_64-pc-windows-msvc
+
+  - name: Upload artifact
+    uses: actions/upload-artifact@v4
+    with:
+      name: rustdesk-windows-x64
+      path: |
+        target\x86_64-pc-windows-msvc\release\rustdesk.exe
+        rustdesk-host=*.exe
+        target\release\sciter.dll
+
+  - name: Show binary size
+    run: |
+      Get-ChildItem target\x86_64-pc-windows-msvc\release\rustdesk.exe | Select-Object Name,Length
