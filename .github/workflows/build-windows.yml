@@ -55,14 +55,10 @@ jobs:
 
       - name: Install required RustDesk dependencies via vcpkg
         run: |
-          C:\vcpkg\vcpkg.exe install \
-          libyuv:x64-windows-static \
-          opus:x64-windows-static \
-          libsodium:x64-windows-static \
-          ffmpeg:x64-windows-static \
-          asio:x64-windows-static \
-          libpng:x64-windows-static \
-          zlib:x64-windows-static
+          C:\vcpkg\vcpkg.exe install "libyuv:x64-windows-static"
+          C:\vcpkg\vcpkg.exe install "openssl:x64-windows-static"
+          C:\vcpkg\vcpkg.exe install "libvpx:x64-windows-static"
+          C:\vcpkg\vcpkg.exe install "libsodium:x64-windows-static"
 
       - name: Install Windows deps (Sciter, etc)
         run: |
