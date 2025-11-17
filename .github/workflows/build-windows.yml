@@ -44,18 +44,14 @@ jobs:
       - name: Disable metrics
         run: echo "VCPKG_DISABLE_METRICS=1" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Install vcpkg
+      - name: Install Git & vcpkg dependencies
         run: |
-          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-          C:\vcpkg\bootstrap-vcpkg.bat
-
-      - name: Set VCPKG_ROOT
-        run: echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Install required deps (manifest mode)
-        run: |
-          cd $env:GITHUB_WORKSPACE
-          C:\vcpkg\vcpkg.exe install --triplet x64-windows --clean-after-build
+          git --version
+          git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
+          & $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
+          echo "VCPKG_ROOT=$env:USERPROFILE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $pkgs = @('libvpx:x64-windows-static','libyuv:x64-windows-static','opus:x64-windows-static','aom:x64-windows-static')
+          & $env:USERPROFILE\vcpkg\vcpkg.exe install $pkg
 
       - name: Build (Windows x64, Release)
         run: cargo build --release
